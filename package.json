@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start:frontend": "vite",
+    "start:backend": "node --env-file=.env engine/server.js",
+    "install:all": "npm install && cd engine && npm install"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",

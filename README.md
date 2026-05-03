@@ -1,156 +1,267 @@
-# Byters Lead Finder
+# Byters Lead Finder 🚀
 
-A sleek, modern lead generation tool for Indian local businesses. Scraps JustDial for businesses without websites, generates WhatsApp pitches using AI, and tracks pitched leads in Supabase.
-
-## 🎨 Design
-
-- **Theme**: Dark, minimal, dev-tool aesthetic
-- **Colors**: 
-  - Background: `#0F0F14`
-  - Cards: `#1A1A23`
-  - Borders: `#32323F`
-  - Accent: `#0A84FF` (electric blue)
-- **Font**: System UI / Inter
-- **Principles**: Clean, minimal, fast — no clutter
-
-## 🚀 Features
-
-### 1. Search Bar (Top)
-- City dropdown: Kolkata, Mumbai, Delhi, Bangalore, Chennai, Hyderabad
-- Category dropdown: Salon, Cafe, Gym, Interior Designer, Photographer
-- Large blue "Find Leads" button
-
-### 2. Stats Row (Below Search)
-- **X leads found** - Total leads from search
-- **X already pitched** - Previously contacted
-- **X new today** - Fresh leads (green accent)
-
-### 3. Results Grid
-Per business card:
-- **Business name** (bold)
-- **Category badge** (colored pill)
-- **Template matched** (e.g., "Salon template")
-- **Status badge**: Green "New lead" or Grey "Already pitched"
-- **📲 Send on WhatsApp** button → opens wa.me link in new tab
-  - On click → saves to Supabase + turns badge grey
-
-### 4. Empty States
-- **Initial state**: "Search a city and category to find leads"
-- **No results**: "No new leads found. Try another category."
-
-### 5. Loading State
-- Skeleton cards while scraping/fetching
-
-## ⚠️ Important: Project Structure
-
-This repo has **two separate parts**. They run independently:
-
-| Part | Location | Runs With |
-|------|----------|-----------|
-| **Frontend** (React dashboard) | `src/` | `npm run dev` (Vite) |
-| **Backend engine** (AI pipeline) | `engine/` | `node engine/job.js` (Node.js only) |
-
-> The `engine/` folder is **NOT** part of the React app. Never import from `engine/` in `src/` — they are separate.
+> AI-powered lead generation pipeline for web agencies. Automatically discovers local businesses without websites, generates personalized demo sites, and queues outreach messages.
 
 ---
 
-## 🚀 Setup (for anyone cloning this repo)
+## Architecture Overview
 
-### Step 1 — Install frontend dependencies
-```bash
-npm install
+This project has **two independent processes** that must both run:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        How It Works                             │
+│                                                                 │
+│  [Browser / React UI]  ←──── http://localhost:5173             │
+│         │                                                       │
+│         │ POST /api/generate-leads                             │
+│         ↓                                                       │
+│  [Node.js Backend]     ←──── http://localhost:3000             │
+│    engine/server.js                                             │
+│         │                                                       │
+│         ├──→ Apify (Google Maps scraper)                        │
+│         ├──→ Supabase (lead database)                           │
+│         ├──→ Groq AI (lead evaluation)                          │
+│         └──→ Demo HTML generator → /public/demo/*.html          │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Step 2 — Create your `.env` file
+| Folder | What it is |
+|--------|-----------|
+| `src/` | React frontend — the dashboard UI (runs on Vite, port 5173) |
+| `engine/` | Node.js backend — scraper, AI, database, demo generator (port 3000) |
+| `templates/` | Base HTML template that gets personalized for each lead |
+| `public/demo/` | Generated demo websites (served by the backend) |
+
+---
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- **Node.js 18+** — [Download here](https://nodejs.org) (check: `node --version`)
+- **npm** — comes with Node.js (check: `npm --version`)
+- API accounts (see [Getting Your API Keys](#getting-your-api-keys) below)
+
+---
+
+## Quick Start
+
+### Step 1 — Clone the Repository
+
 ```bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+cd YOUR_REPO_NAME
+```
+
+### Step 2 — Install All Dependencies
+
+```bash
+# Install frontend dependencies
+npm install
+
+# Install backend engine dependencies (REQUIRED — separate package)
+cd engine
+npm install
+cd ..
+```
+
+> **Windows shortcut:** Double-click `start.bat` — it does both installs automatically.
+> **Mac/Linux shortcut:** Run `bash start.sh`
+
+### Step 3 — Configure Environment Variables
+
+```bash
+# Windows
+copy .env.example .env
+
+# Mac / Linux
 cp .env.example .env
 ```
-Then open `.env` and fill in your real credentials (ask the repo owner for these values):
-```
-VITE_GROQ_KEY=your_groq_api_key_here
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
-```
 
-> ⚠️ **The `.env` file is secret — it is gitignored and was NOT pushed to GitHub.** You must create it manually.
+Then open `.env` and fill in your API keys. See [Getting Your API Keys](#getting-your-api-keys) below.
 
-### Step 3 — Run the frontend
+### Step 4 — Set Up the Database (Supabase)
+
+1. Go to [supabase.com](https://supabase.com) and create a free project
+2. Open **SQL Editor** in your Supabase dashboard
+3. Run the schema setup SQL: copy and paste the contents of `engine/schema.sql`
+4. Also run `engine/schema_update_v2.sql` and `engine/schema_update_v3.sql` in order
+
+### Step 5 — Start the Backend (Terminal 1)
+
 ```bash
-npm run dev
+npm run start:backend
 ```
-Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### Step 4 (optional) — Run the backend engine
-The `engine/` folder is a standalone Node.js pipeline. Run it **separately** in a terminal:
+You should see:
+```
+🚀 Byters Lead Engine running → http://localhost:3000
+📂 Demo sites served at  → http://localhost:3000/demo/<slug>.html
+```
+
+Verify it's working: open [http://localhost:3000/api/health](http://localhost:3000/api/health)
+
+### Step 6 — Start the Frontend (Terminal 2)
+
+Open a **second terminal window** in the project root:
+
 ```bash
-node --env-file=.env engine/job.js
-```
-> Requires Node.js 18+
-
-
-
-## 📝 WhatsApp Message Template
-
-```
-Hi, I'm Abir from Byters. I made a free demo website for {biz_name}. 
-I can make it live in 2 days for just ₹5,000. 
-Interested? Here's a preview: [demo link]
+npm run start:frontend
 ```
 
-## 🗄 Database Schema (Supabase)
+You should see:
+```
+  VITE v8.x  ready in XXX ms
+  ➜  Local: http://localhost:5173/
+```
 
-### Table: `pitched_leads`
+Open [http://localhost:5173](http://localhost:5173) in your browser. ✅
 
-| Column | Type | Description |
-|--------|------|-------------|
-| id | text | Unique lead ID (e.g., jd_001) |
-| name | text | Business name |
-| category | text | Business category |
-| phone | text | Phone number |
-| pitched_at | timestamptz | When pitched (default: now()) |
+---
 
-## 🔍 API Integration (Future)
+## Getting Your API Keys
 
-### JustDial Scraper
-- Fetch businesses by city + category
-- Filter: businesses with no website
-- Returns business name, phone, category
+You need **three API accounts**. All have free tiers that work for development.
 
-### Groq LLM
-- Match business to appropriate template
-- Generate WhatsApp pitch message
-- Templates: Salon, Cafe, Gym, Interior Designer, Photographer
+### 1. Groq (AI Evaluation)
+- Sign up at [console.groq.com](https://console.groq.com)
+- Go to **API Keys** → **Create API Key**
+- Add to `.env`:
+  ```
+  GROQ_API_KEY=gsk_...
+  ```
 
-### Supabase
-- Check if lead already pitched (avoid duplicates)
-- Save new pitched leads
-- Query pitched leads count
+### 2. Supabase (Database)
+- Sign up at [supabase.com](https://supabase.com)
+- Create a new project
+- Go to **Project Settings → API**
+- Add to `.env`:
+  ```
+  VITE_SUPABASE_URL=https://your-project-id.supabase.co
+  VITE_SUPABASE_ANON_KEY=eyJ...
+  SUPABASE_URL=https://your-project-id.supabase.co
+  SUPABASE_ANON_KEY=eyJ...
+  ```
+  *(Same values, listed twice — once for Vite/browser, once for Node.js)*
 
-## 🎯 Design Decisions
+### 3. Apify (Google Maps Scraper)
+- Sign up at [apify.com](https://apify.com)
+- Go to **Settings → Integrations → API Tokens**
+- Add to `.env`:
+  ```
+  APIFY_API_TOKEN=apify_api_...
+  VITE_APIFY_API_KEY=apify_api_...
+  ```
 
-1. **Dark Theme**: Less eye strain for dev tools, modern aesthetic
-2. **No CSS Framework**: Full control, smaller bundle, faster load
-3. **Electric Blue Accent**: High contrast, pops against dark background
-4. **Minimal Cards**: Focus on data, not decoration
-5. **Skeleton Loading**: Perceived performance, smooth UX
+---
 
-## 📱 Responsive
+## How to Use
 
-- Mobile-first design
-- Grid adapts from 1 column (mobile) to 4 columns (desktop)
-- Touch-friendly buttons and selects
+1. **Open the dashboard** at [http://localhost:5173](http://localhost:5173)
+2. Click **"Find Leads with AI"** — this triggers the full pipeline:
+   - Apify scrapes Google Maps for local businesses
+   - Groq AI evaluates each lead (priority score, contact decision)
+   - Demo websites are auto-generated for top leads
+   - Results are stored in Supabase
+3. View leads in the **Lead Finder** tab — click **"Send Pitch"** to open WhatsApp
+4. Check the **Analytics** tab for pipeline stats and top prospects
+5. See generated demos in the **Template** tab → **Generated Demos Portfolio**
 
-## 🔧 Future Enhancements
+---
 
-1. Backend scraper for JustDial
-2. Groq AI integration for template matching
-3. Real Supabase database for persistent storage
-4. Lead history page
-5. Export to CSV
-6. Bulk pitch feature
-7. Template editor
-8. A/B testing for messages
+## Available Scripts
 
-## 📄 License
+From the **project root**:
+
+| Command | What it does |
+|---------|-------------|
+| `npm run start:frontend` | Start the React dashboard (port 5173) |
+| `npm run start:backend` | Start the Node.js engine (port 3000) |
+| `npm run install:all` | Install both frontend and backend dependencies |
+| `npm run dev` | Same as `start:frontend` |
+| `npm run build` | Build production bundle for the frontend |
+
+From the **`engine/` folder**:
+
+| Command | What it does |
+|---------|-------------|
+| `npm run pipeline` | Run the full pipeline manually (Cafe in Mumbai by default) |
+| `npm run ingest` | Run just the Apify scraper |
+
+---
+
+## Project Structure
+
+```
+byters-lead-finder/
+├── src/                    # React frontend
+│   ├── App.jsx             # Main dashboard UI
+│   ├── supabase.js         # Supabase client (browser)
+│   └── services/
+│       └── db.js           # Frontend Supabase queries
+│
+├── engine/                 # Node.js backend (separate npm package)
+│   ├── server.js           # Express API server (port 3000)
+│   ├── pipeline.js         # Full pipeline orchestrator
+│   ├── ingest.js           # Apify scraper
+│   ├── normalize.js        # Lead deduplication & hashing
+│   ├── groq.js             # AI evaluation via Groq
+│   ├── demoGenerator.js    # Demo website generator
+│   ├── db.js               # Supabase client (Node.js)
+│   └── schema.sql          # Database schema (run once in Supabase)
+│
+├── templates/
+│   └── demo.html           # Base template for generated demo sites
+│
+├── public/
+│   └── demo/               # Auto-generated demo HTML files (git-ignored)
+│
+├── .env.example            # Template for your .env file
+├── .env                    # Your API keys (NEVER commit this)
+├── start.bat               # Windows quick-start script
+├── start.sh                # Mac/Linux quick-start script
+└── package.json            # Frontend dependencies & scripts
+```
+
+---
+
+## Troubleshooting
+
+### "Cannot connect to backend" in dashboard
+- Make sure the backend is running: `npm run start:backend`
+- Check [http://localhost:3000/api/health](http://localhost:3000/api/health) returns `{ "status": "ok" }`
+
+### "Missing Supabase credentials" in console
+- Your `.env` is missing `SUPABASE_URL` / `SUPABASE_ANON_KEY`
+- Make sure you ran `copy .env.example .env` and filled in all values
+
+### "Cannot find module" errors in engine/
+- You forgot to install backend dependencies: `cd engine && npm install`
+
+### Demo links show 404
+- Make sure the backend (port 3000) is running — demos are served by Express, not Vite
+- Check that `DEMO_BASE_URL=http://localhost:3000` in your `.env`
+
+### Apify scraper fails
+- Check your `APIFY_API_TOKEN` is correct
+- Make sure you have Apify credits (free tier gives $5/month)
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, Vite 8 |
+| Backend | Node.js 18+, Express 5 |
+| Database | Supabase (PostgreSQL) |
+| AI | Groq (llama-3.1-8b-instant) |
+| Scraper | Apify — Google Maps Places crawler |
+| Demo Generation | Pure HTML/CSS template engine |
+
+---
+
+## License
 
 MIT

@@ -28,3 +28,6 @@ dist-ssr
 .env
 .env.local
 .env.production
+
+# Generated demo sites (runtime artifacts — created by the engine)
+public/demo/*.html

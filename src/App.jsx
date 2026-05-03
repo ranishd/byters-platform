@@ -3,111 +3,123 @@ import './App.css'
 import JSZip from 'jszip/dist/jszip.min.js'
 import { checkLeadExists, saveNewLead, updateLead, fetchAllLeads } from './services/db.js'
 
+const APIFY_API_KEY = import.meta.env.VITE_APIFY_API_KEY || 'your-apify-api-key-here'
+
 const mockLeads = [
-  { id: "jd_001", name: "Glamour Studio", category: "Salon", phone: "9876543210", template: "Salon", pitched: false },
-  { id: "jd_002", name: "Brew & Bean Cafe", category: "Cafe", phone: "9123456789", template: "Cafe", pitched: true },
-  { id: "jd_003", name: "Iron Paradise Gym", category: "Gym", phone: "9812345678", template: "Gym", pitched: false },
-  { id: "jd_004", name: "Urban Canvas Interiors", category: "Interior Designer", phone: "9987654321", template: "Interior Designer", pitched: false },
-  { id: "jd_005", name: "Lens & Light Photography", category: "Photographer", phone: "9001122334", template: "Photographer", pitched: true },
-  { id: "jd_006", name: "Curl Up & Dye Salon", category: "Salon", phone: "9012345678", template: "Salon", pitched: false },
+  { id: "jd_001", name: "Glamour Studio", phone: "9876543210", pitched: false },
+  { id: "jd_002", name: "Brew & Bean Cafe", phone: "9123456789", pitched: true },
+  { id: "jd_003", name: "Iron Paradise Gym", phone: "9812345678", pitched: false },
+  { id: "jd_004", name: "Urban Canvas Interiors", phone: "9987654321", pitched: false },
+  { id: "jd_005", name: "Lens & Light Photography", phone: "9001122334", pitched: true },
+  { id: "jd_006", name: "Curl Up & Dye Salon", phone: "9012345678", pitched: false },
+  { id: "jd_007", name: "Spice Garden Restaurant", phone: "9876512340", pitched: false },
+  { id: "jd_008", name: "Zen Wellness Spa", phone: "9123098765", pitched: false },
 ]
 
-const cities = ["Kolkata", "Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad"]
-const categories = ["Salon", "Cafe", "Gym", "Interior Designer", "Photographer"]
+const defaultTemplate = `Hi {name}, I'm Abir from Byters. I noticed your business doesn't have a website yet, and in today's digital world, that's costing you customers.
 
-const templateVars = ["{name}", "{biz_name}", "{demo_link}"]
+I've created a beautiful, custom website for businesses like yours that gets results. I can build something similar for you in just 2 days for only ₹5,000.
 
-const defaultTemplates = {
-  "Salon": "Hi {name}, I'm Abir from Byters. I made a free demo website for {biz_name}. I can make it live in 2 days for just ₹5,000. Interested? Here's a preview: {demo_link}",
-  "Cafe": "Hi {name}, I'm from Byters. We create beautiful websites for cafes like yours. Let's get your business online in 48 hours for just ₹5,000. Preview: {demo_link}",
-  "Gym": "Hi {name}, I'm from Byters. Your gym deserves an online presence! I'll build a demo website in 2 days for ₹5,000. Check it out: {demo_link}",
-  "Interior Designer": "Hi {name}, I'm from Byters. Showcase your design portfolio online! I'll create a demo website in 2 days for ₹5,000. Preview: {demo_link}",
-  "Photographer": "Hi {name}, I'm from Byters. Display your best shots online! I'll build a portfolio website in 2 days for ₹5,000. See demo: {demo_link}",
-}
+Your competitors are online. Are you?
 
-function DashboardSection({ totalLeads, pitchedLeads, newLeads, categories, uploadedTemplates, templateAssignments }) {
-  const totalTemplates = uploadedTemplates.length
-  const assignedTemplates = Object.keys(templateAssignments).length
+Preview what I can do: {demo_link}`
+
+function DashboardSection({ leads, uploadedTemplates, setActiveTab }) {
+  const totalLeads = leads.length
+  const pitchedLeads = leads.filter(l => l.pitched || l.status === 'evaluated' || l.status === 'messaged').length
+  const newLeads = leads.filter(l => l.status === 'INGESTED').length
+  const highPriority = leads.filter(l => (l.priority || 0) >= 8).length
+  const totalDemos = leads.filter(l => !!l.demo_url).length
   const successRate = totalLeads > 0 ? Math.round((pitchedLeads / totalLeads) * 100) : 0
-  
-  const categoryStats = categories.map(cat => {
-    const count = uploadedTemplates.filter(t => t.categories.includes(cat)).length
-    return { category: cat, count }
-  })
+
+  // Calculate Niche Distribution
+  const niches = leads.reduce((acc, lead) => {
+    const n = lead.niche || lead.category || 'General'
+    acc[n] = (acc[n] || 0) + 1
+    return acc
+  }, {})
+  const topNiches = Object.entries(niches).sort((a, b) => b[1] - a[1]).slice(0, 4)
 
   return (
     <section className="dashboard-section">
       <div className="dashboard-header">
-        <h2>📊 Performance Analytics</h2>
-        <p className="dashboard-subtitle">Overview of your lead generation and template library</p>
+        <div className="dashboard-title-group">
+          <h2>📊 Business Analytics</h2>
+          <p className="dashboard-subtitle">Real-time pipeline performance & lead intelligence</p>
+        </div>
       </div>
 
       <div className="metrics-grid">
-        <div className="metric-card primary">
-          <div className="metric-icon">🎯</div>
+        <div className="metric-card gold">
+          <div className="metric-icon-wrapper">
+            <div className="metric-icon">🎯</div>
+          </div>
           <div className="metric-value">{totalLeads}</div>
-          <div className="metric-label">Total Leads Found</div>
-          <div className="metric-trend positive">+{newLeads} new today</div>
+          <div className="metric-label">Total Leads</div>
+          <div className="metric-trend positive">+{newLeads} pending</div>
         </div>
-        <div className="metric-card success">
-          <div className="metric-icon">✅</div>
+
+        <div className="metric-card rose">
+          <div className="metric-icon-wrapper">
+            <div className="metric-icon">⭐</div>
+          </div>
+          <div className="metric-value">{highPriority}</div>
+          <div className="metric-label">High Priority</div>
+          <div className="metric-trend">8+/10 Rank</div>
+        </div>
+
+        <div className="metric-card azure">
+          <div className="metric-icon-wrapper">
+            <div className="metric-icon">🌐</div>
+          </div>
+          <div className="metric-value">{totalDemos}</div>
+          <div className="metric-label">Demos Ready</div>
+          <div className="metric-trend">Automated</div>
+        </div>
+
+        <div className="metric-card emerald">
+          <div className="metric-icon-wrapper">
+            <div className="metric-icon">✅</div>
+          </div>
           <div className="metric-value">{pitchedLeads}</div>
-          <div className="metric-label">Successfully Pitched</div>
-          <div className="metric-trend">{successRate}% conversion</div>
-        </div>
-        <div className="metric-card info">
-          <div className="metric-icon">📦</div>
-          <div className="metric-value">{totalTemplates}</div>
-          <div className="metric-label">Website Templates</div>
-          <div className="metric-trend">{assignedTemplates} assigned</div>
-        </div>
-        <div className="metric-card accent">
-          <div className="metric-icon">💬</div>
-          <div className="metric-value">{newLeads}</div>
-          <div className="metric-label">Ready to Pitch</div>
-          <div className="metric-trend">View in Finder</div>
+          <div className="metric-label">Processed</div>
+          <div className="metric-trend">{successRate}% Coverage</div>
         </div>
       </div>
 
       <div className="dashboard-grid">
-        <div className="category-breakdown">
-          <h3>📈 Category Distribution</h3>
-          <div className="category-list">
-            {categoryStats.map(({ category, count }, index) => {
-              const colors = ['#FF6B9D', '#4ECDC4', '#FFD93D', '#6BCF7F', '#A855F7']
-              return (
-                <div key={category} className="category-item">
-                  <div className="category-info">
-                    <span className="category-dot" style={{ backgroundColor: colors[index % colors.length] }}></span>
-                    <span className="category-name">{category}</span>
-                  </div>
-                  <div className="category-count">{count} templates</div>
+        <div className="insight-card">
+          <h3>📈 Niche Distribution</h3>
+          <div className="insight-content">
+            {topNiches.length > 0 ? topNiches.map(([name, count]) => (
+              <div key={name} className="insight-row">
+                <span>{name}</span>
+                <div className="niche-bar-container">
+                  <div className="niche-bar" style={{ width: `${(count/totalLeads)*100}%` }}></div>
                 </div>
-              )
-            })}
+                <span className="insight-value">{count}</span>
+              </div>
+            )) : (
+              <p className="empty-text">No data available yet</p>
+            )}
           </div>
         </div>
 
-        <div className="recent-templates">
-          <h3>📁 Recent Uploads</h3>
-          {uploadedTemplates.length > 0 ? (
-            <div className="template-list">
-              {uploadedTemplates.slice(-5).reverse().map((tpl, idx) => (
-                <div key={idx} className="template-list-item">
-                  <span className="template-list-icon">{tpl.isZip ? '📦' : '🌐'}</span>
-                  <span className="template-list-name" title={tpl.name}>
-                    {tpl.name.length > 25 ? `${tpl.name.substring(0, 25)}...` : tpl.name}
-                  </span>
-                  <span className="template-list-size">{tpl.size}</span>
+        <div className="recent-uploads">
+          <h3>✨ Recent Demos</h3>
+          <div className="upload-list">
+            {leads.filter(l => !!l.demo_url).slice(0, 5).map((lead) => (
+              <div key={lead.id} className="upload-item demo-item">
+                <span className="upload-icon">🌐</span>
+                <div className="demo-info">
+                  <span className="upload-name">{lead.name}</span>
+                  <span className="upload-size">{lead.niche || lead.category}</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-dashboard-state">
-              <span>📁</span>
-              <p>No templates uploaded yet</p>
-            </div>
-          )}
+                <a href={lead.demo_url} target="_blank" rel="noreferrer" className="view-demo-small">View</a>
+              </div>
+            ))}
+            {totalDemos === 0 && <p className="empty-text">No demos generated yet</p>}
+          </div>
         </div>
       </div>
 
@@ -115,38 +127,34 @@ function DashboardSection({ totalLeads, pitchedLeads, newLeads, categories, uplo
         <h3>⚡ Quick Actions</h3>
         <div className="action-buttons">
           <button className="action-btn primary" onClick={() => setActiveTab('leads')}>
-            🔍 Find New Leads
+            <span className="btn-icon">🔍</span>
+            Start Scraper
           </button>
           <button className="action-btn secondary" onClick={() => setActiveTab('templates')}>
-            📝 Edit Templates
+            <span className="btn-icon">📝</span>
+            Edit Message
           </button>
-          <button className="action-btn accent">📊 Export Report</button>
+          <button className="action-btn accent" onClick={() => window.open('https://supabase.com/dashboard/project/rltcnrkvuyagnnsdywqv', '_blank')}>
+            <span className="btn-icon">🗄️</span>
+            Database
+          </button>
         </div>
       </div>
 
-      <div className="performance-tips">
-        <h3>💡 Tips for Success</h3>
-        <div className="tips-grid">
-          <div className="tip-card">
-            <span className="tip-icon">🎯</span>
-            <h4>Focus on Quality</h4>
-            <p>Personalize messages for each business type using specific templates</p>
-          </div>
-          <div className="tip-card">
-            <span className="tip-icon">⏱️</span>
-            <h4>Fast Response</h4>
-            <p>Send pitches within 24 hours for best results</p>
-          </div>
-          <div className="tip-card">
-            <span className="tip-icon">📈</span>
-            <h4>Track Performance</h4>
-            <p>Monitor which templates get the most responses</p>
-          </div>
-          <div className="tip-card">
-            <span className="tip-icon">💼</span>
-            <h4>Build Portfolio</h4>
-            <p>Keep adding successful website templates</p>
-          </div>
+      <div className="top-leads-section">
+        <h3>🏆 Top Prospects (Rank 9-10)</h3>
+        <div className="top-leads-list">
+          {leads.filter(l => (l.priority || 0) >= 9).slice(0, 3).map(lead => (
+            <div key={lead.id} className="top-lead-item">
+              <div className="top-lead-rank">{lead.priority}/10</div>
+              <div className="top-lead-details">
+                <strong>{lead.name}</strong>
+                <span>{lead.city} • {lead.niche || lead.category}</span>
+              </div>
+              {lead.demo_url && <span className="demo-badge">Demo ✨</span>}
+            </div>
+          ))}
+          {highPriority === 0 && <p className="empty-text">No top prospects yet. Run the AI finder!</p>}
         </div>
       </div>
     </section>
@@ -154,112 +162,134 @@ function DashboardSection({ totalLeads, pitchedLeads, newLeads, categories, uplo
 }
 
 export default function App() {
-  const [city, setCity] = useState("")
-  const [category, setCategory] = useState("")
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(false)
+  const [aiStatus, setAiStatus] = useState('idle') // idle, scanning, processing, finding, complete
   const [searched, setSearched] = useState(false)
   const [toast, setToast] = useState({ show: false, message: "" })
   const [activeTab, setActiveTab] = useState("leads")
-  const [templates, setTemplates] = useState(defaultTemplates)
-  const [editingTemplate, setEditingTemplate] = useState(null)
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
+  const [template, setTemplate] = useState(defaultTemplate)
+  const [editingTemplate, setEditingTemplate] = useState(false)
   const [uploadedTemplates, setUploadedTemplates] = useState([])
-  const [templateAssignments, setTemplateAssignments] = useState({})
   const [isProcessingZip, setIsProcessingZip] = useState(false)
-
-  const loadLeadsFromDB = async () => {
-    const dbLeads = await fetchAllLeads();
-    setLeads(dbLeads);
-  }
-
-  useEffect(() => {
-    loadLeadsFromDB();
-  }, [])
 
   const totalLeads = leads.length
   const pitchedLeads = leads.filter(l => l.pitched).length
   const newLeads = leads.filter(l => !l.pitched).length
 
-  const showToast = (message) => {
-    setToast({ show: true, message })
-    setTimeout(() => setToast({ show: false, message: "" }), 3000)
+  const loadLeadsFromDB = async () => {
+    const dbLeads = await fetchAllLeads()
+    setLeads(dbLeads)
   }
 
-  const handleSearch = async () => {
-    if (!city || !category) return
+  useEffect(() => {
+    loadLeadsFromDB()
+  }, [])
+
+  const showToast = (message) => {
+    setToast({ show: true, message })
+    setTimeout(() => setToast({ show: false, message: "" }), 3500)
+  }
+
+  const handleAISearch = async () => {
+    if (loading) return
+    
     setLoading(true)
     setSearched(true)
     
-    // Simulate finding leads from the internet (using mock data as a pool)
-    const internetLeads = mockLeads.filter(l => l.category === category)
+    const statusMessages = {
+      scanning: "🤖 Scanning business directories...",
+      processing: "⚡ Processing data...",
+      finding: "🎯 Qualifying best leads...",
+      generating: "✨ Generating personalized messages..."
+    }
     
-    let newFoundCount = 0;
+    setAiStatus('scanning')
+    showToast(statusMessages.scanning)
     
     try {
-      for (const internetLead of internetLeads) {
-        // 1. Check if exists in DB (by name and city)
-        const exists = await checkLeadExists(internetLead.name, city);
-        
-        if (!exists) {
-          // 2. Save new cafe
-          await saveNewLead({
-             name: internetLead.name,
-             city: city,
-             category: category,
-             phone: internetLead.phone
-          });
-          newFoundCount++;
-        }
+      setAiStatus('processing')
+      showToast("🚀 Triggering Backend Pipeline...")
+      
+      // Trigger the backend pipeline (which handles Apify, Database Deduplication, and Groq natively)
+      const response = await fetch('http://localhost:3000/api/generate-leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          category: 'Cafe',
+          city: 'Mumbai',
+          limit: 3
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Backend API error: ${response.status}`);
       }
       
-      // Refresh leads from DB
-      await loadLeadsFromDB();
-      showToast(newFoundCount === 0 ? "No new leads found in this area" : `Found and saved ${newFoundCount} new lead(s)!`)
-    } catch (err) {
-      console.error("Database error during search:", err);
-      showToast("Error saving to database. Check console for details.");
+      const data = await response.json();
+      
+      if (data.success) {
+        setAiStatus('complete')
+        showToast(`✅ Pipeline success! Processed ${data.stats.processed} leads.`)
+      } else {
+        throw new Error(data.error);
+      }
+      
+      // Refresh leads from the database to see the newly generated ones
+      await loadLeadsFromDB()
+      
+      setTimeout(() => setAiStatus('idle'), 3000)
+      
+    } catch (error) {
+      console.error("Pipeline trigger error:", error)
+      setAiStatus('idle')
+      showToast("Backend connection failed — ensure server is running")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
   const handleWhatsAppClick = async (lead) => {
-    const template = templates[lead.category] || defaultTemplates[lead.category]
-    const assignedTemplate = uploadedTemplates[templateAssignments[lead.category]]
-    const demoInfo = assignedTemplate ? `using ${assignedTemplate.name}` : '[demo link]'
-    const message = template.replace(/{name}/g, "Abir").replace(/{biz_name}/g, lead.name).replace(/{demo_link}/g, demoInfo)
+    const message = template
+      .replace(/{name}/g, lead.name.split(' ')[0])
+      .replace(/{demo_link}/g, lead.demo_url || "https://your-demo-link.com")
     
-    // 5. Save message and update status in DB
     await updateLead(lead.id, { 
       pitched: true, 
       status: 'messaged',
       message: message 
-    });
+    })
     
     window.open(`https://wa.me/${lead.phone}?text=${encodeURIComponent(message)}`, '_blank')
-    await loadLeadsFromDB();
-    showToast("Lead saved and WhatsApp opened!")
+    
+    await loadLeadsFromDB()
+    showToast("WhatsApp message opened!")
   }
 
   const detectCategoriesFromPath = (filePath) => {
     const lowerPath = filePath.toLowerCase()
     const detected = []
-    if (lowerPath.includes('salon') || lowerPath.includes('beauty')) detected.push('Salon')
-    if (lowerPath.includes('cafe') || lowerPath.includes('coffee') || lowerPath.includes('restaurant')) detected.push('Cafe')
-    if (lowerPath.includes('gym') || lowerPath.includes('fitness') || lowerPath.includes('sport')) detected.push('Gym')
-    if (lowerPath.includes('interior') || lowerPath.includes('design') || lowerPath.includes('architect')) detected.push('Interior Designer')
-    if (lowerPath.includes('photo') || lowerPath.includes('portfolio') || lowerPath.includes('camera')) detected.push('Photographer')
-    return detected.length > 0 ? detected : [...categories]
+    if (lowerPath.includes('salon') || lowerPath.includes('beauty')) detected.push('Beauty')
+    if (lowerPath.includes('cafe') || lowerPath.includes('coffee') || lowerPath.includes('restaurant')) detected.push('Food')
+    if (lowerPath.includes('gym') || lowerPath.includes('fitness')) detected.push('Fitness')
+    if (lowerPath.includes('interior') || lowerPath.includes('design')) detected.push('Design')
+    if (lowerPath.includes('photo') || lowerPath.includes('portfolio')) detected.push('Photography')
+    return detected.length > 0 ? detected : ['Business']
   }
 
   const processFiles = (files) => {
-    const newTemplates = Array.from(files).filter(f => f.name.endsWith('.html') || f.name.endsWith('.css') || f.name.endsWith('.js') || f.name.endsWith('.json') || f.name.endsWith('.zip')).map(file => {
-      if (file.name.endsWith('.zip')) {
-        return { name: file.name, size: formatFileSize(file.size), file: file, isZip: true, categories: [...categories], type: 'zip' }
-      }
-      return { name: file.name, size: formatFileSize(file.size), file: file, categories: detectCategoriesFromPath(file.name), type: file.name.split('.').pop() }
-    })
+    const newTemplates = Array.from(files).filter(f => 
+      f.name.endsWith('.html') || f.name.endsWith('.css') || 
+      f.name.endsWith('.js') || f.name.endsWith('.json') || f.name.endsWith('.zip')
+    ).map(file => ({
+      name: file.name,
+      size: formatFileSize(file.size),
+      file: file,
+      type: file.name.endsWith('.zip') ? 'zip' : file.name.split('.').pop()
+    }))
+    
     setUploadedTemplates(prev => [...prev, ...newTemplates])
     showToast(`Uploaded ${newTemplates.length} file${newTemplates.length > 1 ? 's' : ''}`)
   }
@@ -269,18 +299,41 @@ export default function App() {
     try {
       const zip = await JSZip.loadAsync(zipFile)
       const htmlFiles = []
+      
       zip.forEach((relativePath, zipEntry) => {
-        if (!zipEntry.dir && (relativePath.endsWith('.html') || relativePath.endsWith('.css') || relativePath.endsWith('.js'))) {
+        if (!zipEntry.dir && 
+            (relativePath.endsWith('.html') || 
+             relativePath.endsWith('.css') || 
+             relativePath.endsWith('.js'))) {
           htmlFiles.push({ path: relativePath, entry: zipEntry })
         }
       })
-      if (htmlFiles.length === 0) { showToast("No HTML/CSS/JS files found in ZIP"); setIsProcessingZip(false); return }
+      
+      if (htmlFiles.length === 0) {
+        showToast("No HTML/CSS/JS files found in ZIP")
+        setIsProcessingZip(false)
+        return
+      }
+      
       const extractedTemplates = await Promise.all(htmlFiles.slice(0, 10).map(async (item) => {
         const content = await item.entry.async('string')
-        const detectedCategories = detectCategoriesFromPath(item.path)
-        return { name: `${zipFile.name}/${item.path}`.substring(0, 50), size: `${content.length} chars`, content, categories: detectedCategories, type: 'extracted', path: item.path, file: zipFile }
+        return { 
+          name: `${zipFile.name}/${item.path}`.substring(0, 50),
+          size: `${content.length} chars`,
+          type: 'extracted',
+          path: item.path
+        }
       }))
-      setUploadedTemplates(prev => [...prev, { name: zipFile.name, size: formatFileSize(zipFile.size), file: zipFile, categories: [...categories], type: 'zip', extractedTemplates, isZip: true }])
+      
+      setUploadedTemplates(prev => [...prev, { 
+        name: zipFile.name, 
+        size: formatFileSize(zipFile.size), 
+        file: zipFile, 
+        type: 'zip', 
+        extractedTemplates,
+        isZip: true 
+      }])
+      
       showToast(`Extracted ${extractedTemplates.length} templates from ${zipFile.name}`)
     } catch (err) {
       console.error('ZIP error:', err)
@@ -291,7 +344,12 @@ export default function App() {
 
   const handleFileDrop = (files) => {
     const zipFiles = Array.from(files).filter(f => f.name.endsWith('.zip'))
-    const regularFiles = Array.from(files).filter(f => !f.name.endsWith('.zip') && (f.name.endsWith('.html') || f.name.endsWith('.css') || f.name.endsWith('.js') || f.name.endsWith('.json')))
+    const regularFiles = Array.from(files).filter(f => 
+      !f.name.endsWith('.zip') && 
+      (f.name.endsWith('.html') || f.name.endsWith('.css') || 
+       f.name.endsWith('.js') || f.name.endsWith('.json'))
+    )
+    
     if (regularFiles.length > 0) processFiles(regularFiles)
     if (zipFiles.length > 0) zipFiles.forEach(zip => processZipFile(zip))
   }
@@ -305,113 +363,194 @@ export default function App() {
 
   const removeTemplate = (index) => {
     setUploadedTemplates(prev => prev.filter((_, i) => i !== index))
-    const newAssignments = { ...templateAssignments }
-    Object.keys(newAssignments).forEach(cat => { if (newAssignments[cat] == index) delete newAssignments[cat] })
-    setTemplateAssignments(newAssignments)
     showToast("Template removed")
   }
 
-  const assignTemplateToCategory = (category, templateIndex) => {
-    setTemplateAssignments(prev => ({ ...prev, [category]: templateIndex || undefined }))
-    showToast(`Assigned to ${category}`)
-  }
-
-  const handleSaveTemplate = (category, content) => {
-    setTemplates(prev => ({ ...prev, [category]: content }))
-    setIsTemplateModalOpen(false)
-    setEditingTemplate(null)
+  const handleSaveTemplate = (content) => {
+    setTemplate(content)
+    setEditingTemplate(false)
     showToast("Template saved!")
   }
 
-  const handleResetTemplate = (category) => {
-    setTemplates(prev => ({ ...prev, [category]: defaultTemplates[category] }))
+  const handleResetTemplate = () => {
+    setTemplate(defaultTemplate)
     showToast("Reset to default")
+  }
+
+  const getAIStatusDisplay = () => {
+    const statusConfig = {
+      scanning: { icon: '🔍', text: 'Scanning directories' },
+      processing: { icon: '⚡', text: 'Processing data' },
+      finding: { icon: '🎯', text: 'Qualifying leads' },
+      generating: { icon: '✨', text: 'Generating messages' },
+      complete: { icon: '✅', text: 'Complete!' }
+    }
+    const config = statusConfig[aiStatus]
+    if (!config || aiStatus === 'idle') return null
+    return (
+      <div className={`ai-status-indicator ${aiStatus}`}>
+        <span className="ai-status-icon">{config.icon}</span>
+        <span className="ai-status-text">{config.text}</span>
+        <div className="ai-progress-bar">
+          <div className="ai-progress-fill"></div>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="app">
-      <div className="container">
-        <header className="header">
-          <h1 className="logo">Byters Lead Finder</h1>
-          <p className="tagline">Find local businesses without websites. Pitch them instantly.</p>
+      <div className="floating-particles" aria-hidden="true">
+        {[...Array(20)].map((_, i) => (
+          <div key={i} className="particle" style={{ '--delay': `${i * 0.5}s`, '--duration': `${10 + i * 5}s` }} />
+        ))}
+      </div>
+
+      <div className="app-container">
+        <header className="main-header">
+          <div className="logo-group">
+            <div className="logo-icon">✦</div>
+            <h1 className="logo-text">Byters</h1>
+          </div>
+          <p className="tagline">Digital Growth for Every Business</p>
         </header>
 
-        <div className="tab-nav">
-          <button className={`tab-btn ${activeTab === 'leads' ? 'active' : ''}`} onClick={() => setActiveTab('leads')}>
-            <span className="tab-icon">📊</span> Lead Finder
+        <nav className="tab-nav">
+          <button 
+            className={`tab-btn ${activeTab === 'leads' ? 'active' : ''}`}
+            onClick={() => setActiveTab('leads')}
+          >
+            <span className="tab-icon">🔍</span>
+            Lead Finder
           </button>
-          <button className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-            <span className="tab-icon">📈</span> Analytics
+          <button 
+            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <span className="tab-icon">📊</span>
+            Analytics
           </button>
-          <button className={`tab-btn ${activeTab === 'templates' ? 'active' : ''}`} onClick={() => setActiveTab('templates')}>
-            <span className="tab-icon">📦</span> Templates
+          <button 
+            className={`tab-btn ${activeTab === 'templates' ? 'active' : ''}`}
+            onClick={() => setActiveTab('templates')}
+          >
+            <span className="tab-icon">📝</span>
+            Template
           </button>
-        </div>
+        </nav>
 
         {activeTab === 'leads' && (
-          <>
-            <section className="search-section">
-              <div className="search-row">
-                <select className="select-input" value={city} onChange={(e) => setCity(e.target.value)}>
-                  <option value="" disabled>Select city</option>
-                  {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select className="select-input" value={category} onChange={(e) => setCategory(e.target.value)}>
-                  <option value="" disabled>Select category</option>
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <button className="search-btn" onClick={handleSearch} disabled={!city || !category || loading}>
-                  {loading ? (<><span className="spinner"></span> Finding Leads...</>) : "Find Leads"}
+          <section className="leads-section">
+            <div className="search-panel">
+              <div className="search-header">
+                <h2>AI-Powered Lead Generation</h2>
+                <p className="search-subtitle">Click below to find businesses needing website upgrades</p>
+              </div>
+
+              <div className="search-controls">
+                <button 
+                  className="search-button ai-search-btn" 
+                  onClick={handleAISearch}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner"></span>
+                      <span className="ai-loading-text">
+                        {aiStatus === 'scanning' && '🤖 Scanning business directories...'}
+                        {aiStatus === 'processing' && '⚡ Processing data...'}
+                        {aiStatus === 'finding' && '🎯 Finding qualified leads...'}
+                        {aiStatus === 'complete' && '✅ Complete!'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="btn-icon">🤖</span>
+                      Find Leads with AI
+                    </>
+                  )}
                 </button>
               </div>
-            </section>
+              
+              {getAIStatusDisplay()}
+            </div>
 
             {(searched || leads.length > 0) && (
-              <section className="stats-section">
-                <div className="stat-card"><span className="stat-value">{totalLeads}</span><span className="stat-label">leads found</span></div>
+              <div className="stats-bar">
+                <div className="stat-item">
+                  <span className="stat-number">{totalLeads}</span>
+                  <span className="stat-label">Total Found</span>
+                </div>
                 <div className="stat-divider"></div>
-                <div className="stat-card"><span className="stat-value">{pitchedLeads}</span><span className="stat-label">already pitched</span></div>
+                <div className="stat-item">
+                  <span className="stat-number">{pitchedLeads}</span>
+                  <span className="stat-label">Contacted</span>
+                </div>
                 <div className="stat-divider"></div>
-                <div className="stat-card"><span className="stat-value accent">{newLeads}</span><span className="stat-label">new today</span></div>
-              </section>
+                <div className="stat-item highlight">
+                  <span className="stat-number accent">{newLeads}</span>
+                  <span className="stat-label">Ready Now</span>
+                </div>
+              </div>
             )}
 
-            <section className="results-section">
+            <div className="results-container">
               {loading ? (
-                <div className="skeleton-grid">
+                <div className="loading-grid">
                   {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="skeleton-card">
-                      <div className="skeleton-line short"></div>
-                      <div className="skeleton-line medium"></div>
-                      <div className="skeleton-line long"></div>
+                    <div key={i} className="lead-card skeleton">
+                      <div className="skeleton-line title"></div>
+                      <div className="skeleton-line subtitle"></div>
                       <div className="skeleton-line button"></div>
                     </div>
                   ))}
                 </div>
               ) : leads.length > 0 ? (
-                <div className="results-grid">
+                <div className="leads-grid">
                   {leads.map(lead => (
-                    <div key={lead.id} className="lead-card">
-                      <div className="card-header">
-                        <h3 className="lead-name">{lead.name}</h3>
-                        <span className="lead-badge" data-category={lead.category}>{lead.category}</span>
-                      </div>
-                      <div className="card-body">
-                        <div className="template-row">
-                          <span className="template-label">Template:</span>
-                          <span className="template-name">{lead.template}</span>
+                    <div key={lead.id} className={`lead-card ${lead.pitched ? 'pitched' : ''} priority-${Math.floor(lead.priority || 0)}`}>
+                      <div className="lead-header">
+                        <div className="lead-title-group">
+                          <h3 className="lead-name">{lead.name}</h3>
+                          <div className="lead-meta">
+                            <span className="niche-tag">{lead.niche || lead.category || 'Business'}</span>
+                            <span className="city-tag">{lead.city || 'Unknown'}</span>
+                          </div>
                         </div>
-                        <div className="status-badge-row">
-                          {lead.pitched ? (
-                            <span className="status-badge pitched"><span className="status-dot"></span> Already pitched</span>
-                          ) : (
-                            <span className="status-badge new"><span className="status-dot new"></span> New lead</span>
-                          )}
+                        <div className="priority-badge" title="AI Priority Score">
+                          {lead.priority ? `⭐ ${lead.priority}` : 'New'}
                         </div>
                       </div>
-                      <div className="whatsapp-btn-container">
-                        <button className={`whatsapp-btn ${lead.pitched ? 'disabled' : ''}`} onClick={() => !lead.pitched && handleWhatsAppClick(lead)} disabled={lead.pitched}>
-                          <span className="whatsapp-icon">📲</span> {lead.pitched ? 'Already pitched' : 'Send on WhatsApp'}
+                      
+                      {lead.tagline && <p className="lead-tagline">"{lead.tagline}"</p>}
+                      
+                      <div className="lead-phone">
+                        <span className="phone-icon">📞</span>
+                        {lead.phone || 'No phone'}
+                      </div>
+
+                      <div className="lead-actions">
+                        {lead.demo_url ? (
+                          <a 
+                            href={lead.demo_url} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="view-demo-btn"
+                          >
+                            <span className="btn-icon">🌐</span>
+                            View Demo
+                          </a>
+                        ) : (
+                          <div className="no-demo-badge">No Demo Yet</div>
+                        )}
+                        
+                        <button
+                          className={`whatsapp-button ${lead.pitched ? 'disabled' : ''}`}
+                          onClick={() => !lead.pitched && handleWhatsAppClick(lead)}
+                          disabled={lead.pitched}
+                        >
+                          <span className="whatsapp-icon">💬</span>
+                          {lead.pitched ? 'Contacted' : 'Send Pitch'}
                         </button>
                       </div>
                     </div>
@@ -420,141 +559,123 @@ export default function App() {
               ) : (
                 searched && (
                   <div className="empty-state">
-                    <div className="empty-icon">🚫</div>
-                    <h3>No new leads found</h3>
-                    <p>Try another category or city combination</p>
+                    <div className="empty-icon">✦</div>
+                    <h3>No leads found</h3>
+                    <p>Try again or check your connection</p>
                   </div>
                 )
               )}
+
               {!searched && !loading && (
                 <div className="empty-state">
-                  <div className="empty-icon">🔍</div>
-                  <h3>Find Your First Lead</h3>
-                  <p>Search a city and category to discover local businesses without websites</p>
+                  <div className="empty-icon">🤖</div>
+                  <h3>AI Lead Discovery</h3>
+                  <p>Click "Find Leads with AI" to discover businesses automatically</p>
                 </div>
               )}
-            </section>
-          </>
-        )}
-
-        {activeTab === 'templates' && (
-          <section className="templates-section">
-            <div className="templates-header">
-              <h2>Templates & Website Uploads</h2>
-              <p className="templates-subtitle">Manage message templates and upload website demos (supports ZIP folders)</p>
-            </div>
-
-            <div className="website-templates-section">
-              <div className="website-templates-header">
-                <h3>📁 Demo Website Templates</h3>
-                <p className="website-templates-subtitle">Upload individual files or ZIP folders with full project structure</p>
-              </div>
-
-              <div className="upload-zone">
-                <div className="upload-area" onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over') }} onDragLeave={(e) => { e.currentTarget.classList.remove('drag-over') }} onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); handleFileDrop(e.dataTransfer.files); }}>
-                  <input type="file" id="file-upload" multiple accept=".html,.css,.js,.json,.zip" onChange={(e) => handleFileSelect(e.target.files)} style={{display: 'none'}} />
-                  <label htmlFor="file-upload" className="upload-label">
-                    <div className="upload-icon">📁</div>
-                    <div className="upload-text"><strong>Drag & Drop</strong> files or ZIP folders here<br /><span className="upload-hint">HTML, CSS, JS, JSON, ZIP supported</span></div>
-                    <button type="button" className="upload-btn" onClick={() => document.getElementById('file-upload').click()}>Select Files</button>
-                  </label>
-                </div>
-              </div>
-
-              {isProcessingZip && <div className="processing-zip"><span className="spinner"></span>Extracting ZIP file... Please wait</div>}
-
-              {uploadedTemplates.length > 0 && (
-                <div className="uploaded-templates">
-                  <h4>📦 Uploaded Templates ({uploadedTemplates.length})</h4>
-                  <div className="template-files-grid">
-                    {uploadedTemplates.map((tpl, index) => (
-                      <div key={index} className="template-file-card">
-                        <div className="template-file-icon">{tpl.isZip ? '📦' : tpl.name.endsWith('.html') && '🌐' || tpl.name.endsWith('.css') && '🎨' || tpl.name.endsWith('.js') && '⚙️' || tpl.name.endsWith('.json') && '📄' || '📁'}</div>
-                        <div className="template-file-info">
-                          <span className="template-file-name" title={tpl.fullName || tpl.name}>{tpl.name}</span>
-                          <span className="template-file-size">{tpl.size}</span>
-                          {tpl.isZip && tpl.extractedTemplates && <span className="extracted-count">{tpl.extractedTemplates.length} templates inside</span>}
-                          <div className="template-file-tags">{tpl.categories.map(cat => <span key={cat} className="file-category-tag" data-category={cat}>{cat}</span>)}</div>
-                        </div>
-                        <button className="remove-file-btn" onClick={() => removeTemplate(index)} title="Remove">✕</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {uploadedTemplates.length > 0 && (
-                <div className="template-categories-assign">
-                  <h4>📌 Assign Templates to Categories</h4>
-                  <div className="category-assignment-grid">
-                    {categories.map(cat => (
-                      <div key={cat} className="category-assignment">
-                        <span className="assignment-label" data-category={cat}>{cat}</span>
-                        <select value={templateAssignments[cat] || ''} onChange={(e) => assignTemplateToCategory(cat, e.target.value)} className="assignment-select">
-                          <option value="">No template</option>
-                          {uploadedTemplates.map((tpl, idx) => <option key={idx} value={idx}>{tpl.name.substring(0, 30)}{tpl.name.length > 30 ? '...' : ''}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="template-divider"></div>
-
-            <div className="templates-grid">
-              {categories.map(cat => (
-                <div key={cat} className="template-card">
-                  <div className="template-category-badge" data-category={cat}>{cat}</div>
-                  <div className="template-preview"><p>{templates[cat] || defaultTemplates[cat]}</p></div>
-                  <div className="template-variables">{templateVars.map(v => <span key={v} className="var-tag">{v}</span>)}</div>
-                  <div className="template-actions">
-                    <button className="edit-btn" onClick={() => { setEditingTemplate(cat); setIsTemplateModalOpen(true); }}>✏️ Edit</button>
-                    <button className="reset-btn" onClick={() => handleResetTemplate(cat)}>↺ Reset</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="template-info-box">
-              <h3>📋 Available Variables</h3>
-              <div className="variables-grid">
-                {templateVars.map(v => {
-                  const labels = { '{name}': 'Business contact name', '{biz_name}': 'Business name', '{demo_link}': 'Demo website link' }
-                  return <div key={v} className="variable-item"><code>{v}</code><span>{labels[v]}</span></div>
-                })}
-              </div>
-              <p className="info-note">Variables auto-replace when sending. ZIP uploads extract HTML/CSS/JS from nested folders!</p>
             </div>
           </section>
         )}
 
         {activeTab === 'dashboard' && (
-          <DashboardSection totalLeads={totalLeads} pitchedLeads={pitchedLeads} newLeads={newLeads} categories={categories} uploadedTemplates={uploadedTemplates} templateAssignments={templateAssignments} />
+          <DashboardSection
+            leads={leads}
+            uploadedTemplates={uploadedTemplates}
+            setActiveTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'templates' && (
+          <section className="templates-section">
+            <div className="templates-header">
+              <h2>Message Template</h2>
+              <p className="templates-subtitle">Customize your outreach message</p>
+            </div>
+
+            <div className="template-preview-card">
+              <div className="template-preview-header">
+                <span className="preview-label">Template Preview</span>
+                <span className="var-hint">Variables: name, demo_link</span>
+              </div>
+              <div className="template-content">
+                <p>{template.replace(/\n/g, '<br />')}</p>
+              </div>
+            </div>
+
+            <div className="template-edit-section">
+              <div className="edit-header">
+                <h3>Edit Template</h3>
+                <div className="edit-actions">
+                  <button className="reset-btn" onClick={handleResetTemplate}>
+                    Reset
+                  </button>
+                </div>
+              </div>
+              <textarea
+                className="template-editor"
+                value={template}
+                onChange={(e) => setTemplate(e.target.value)}
+                rows={8}
+                placeholder="Write your message template..."
+              />
+              <div className="template-variables">
+                <span className="var-tag">{'{name}'}</span>
+                <span className="var-desc">- Contact name</span>
+                <span className="var-tag">{'{demo_link}'}</span>
+                <span className="var-desc">- Demo website link</span>
+              </div>
+              <button className="save-button" onClick={() => handleSaveTemplate(template)}>
+                Save Template
+              </button>
+            </div>
+
+            <div className="portfolio-section">
+              <h3>🎨 Generated Demos Portfolio</h3>
+              <p className="upload-subtitle">Review and manage your AI-generated website demos</p>
+
+              <div className="demo-portfolio-grid">
+                {leads.filter(l => !!l.demo_url).map(lead => (
+                  <div key={lead.id} className="portfolio-card">
+                    <div className="portfolio-card-header">
+                      <span className="niche-badge">{lead.niche || lead.category}</span>
+                      <span className="priority-pill">P{lead.priority}</span>
+                    </div>
+                    <h4 className="portfolio-business-name">{lead.name}</h4>
+                    <p className="portfolio-location">{lead.city}</p>
+                    <div className="portfolio-actions">
+                      <a href={lead.demo_url} target="_blank" rel="noreferrer" className="portfolio-btn view">
+                        Preview
+                      </a>
+                      <button 
+                        className="portfolio-btn copy"
+                        onClick={() => {
+                          navigator.clipboard.writeText(lead.demo_url);
+                          showToast("Link copied to clipboard!");
+                        }}
+                      >
+                        Copy Link
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {leads.filter(l => !!l.demo_url).length === 0 && (
+                  <div className="empty-portfolio">
+                    <div className="empty-icon">📁</div>
+                    <p>No demos generated yet. Start the Lead Finder to create your first one!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
         )}
       </div>
 
-      {isTemplateModalOpen && (
-        <div className="modal-overlay" onClick={() => { setIsTemplateModalOpen(false); setEditingTemplate(null); }}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Edit Template - {editingTemplate}</h2>
-              <button className="modal-close" onClick={() => { setIsTemplateModalOpen(false); setEditingTemplate(null); }}>✕</button>
-            </div>
-            <div className="modal-body">
-              <textarea value={templates[editingTemplate] || ''} onChange={(e) => setTemplates(prev => ({ ...prev, [editingTemplate]: e.target.value }))} placeholder="Write your template message..." rows={6} />
-              <div className="modal-variables"><p><strong>Available variables:</strong></p>{templateVars.map(v => <code key={v}>{v}</code>)}</div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => { setTemplates(prev => ({ ...prev, [editingTemplate]: defaultTemplates[editingTemplate] })) }}>Reset to Default</button>
-              <button className="btn-primary" onClick={() => handleSaveTemplate(editingTemplate, templates[editingTemplate])}>Save Template</button>
-            </div>
-          </div>
+      {toast.show && (
+        <div className="toast-notification">
+          <span className="toast-icon">✓</span>
+          {toast.message}
         </div>
       )}
-
-      {toast.show && (<div className="toast"><span>✓</span>{toast.message}</div>)}
     </div>
   )
 }

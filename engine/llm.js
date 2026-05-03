@@ -1,7 +1,7 @@
 import 'dotenv/config';
 
 // If run via `node --env-file=.env`, process.env is populated.
-const GROQ_API_KEY = process.env.VITE_GROQ_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 if (!GROQ_API_KEY) {
   console.warn("WARNING: Missing Groq API key in process.env. Ensure you run this script with --env-file=.env");
@@ -13,19 +13,18 @@ if (!GROQ_API_KEY) {
  */
 export async function transformLeadData(normalizedLead) {
   const systemPrompt = `
-You are a data transformation engine for an automated outreach pipeline.
+You are a data evaluation engine for an automated outreach pipeline.
 Your job is to generate highly structured, deterministic JSON output.
 You must output ONLY raw JSON without markdown code blocks.
 Do not include any pleasantries or creative variations.
-Keep the outreach message under 60 words, strictly business-focused, and highly relevant to the category.
+Evaluate the business to decide if they need a website upgrade.
 
 Schema required:
 {
-  "business_name": "string (cleaned)",
-  "hero_headline": "string (max 5 words for demo site)",
-  "hero_subtext": "string (max 10 words for demo site)",
-  "primary_color_hex": "string (e.g. #FF5733 based on category aesthetics)",
-  "outreach_message": "string (the actual message replacing the old template system)"
+  "should_contact": boolean,
+  "priority": number (1-10),
+  "niche": "string",
+  "message": "string (the actual outreach message, max 60 words)"
 }
 `;
 
@@ -60,7 +59,8 @@ City: ${normalizedLead.city}
 
   const data = await response.json();
   try {
-    const content = data.choices[0].message.content;
+    let content = data.choices[0].message.content;
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(content);
     return parsed;
   } catch (err) {
